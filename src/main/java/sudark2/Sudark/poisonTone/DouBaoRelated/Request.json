@@ -1,0 +1,23 @@
+{
+  "model": "doubao-seed-2-0-lite-260215",
+  "previous_response_id": reference.json.id,
+  "input": [
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "user",
+      "content": "textIn"
+    }
+  ],
+  #当且仅当textIn中出现”查“，”不知道“，”？“，”什么“才加入此tool用于调用 "tools": [
+    {
+      "type": "web_search",
+      "max_keyword": 2
+    }
+  ],
+  "thinking": "disable"
+}
+
+//如上是发送构造参考，带有#的表明需要根据输入选择性加入

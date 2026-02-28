@@ -1,0 +1,50 @@
+{
+  "created_at": 1765193461,
+  "id": "resp_0217651934613099e1bacc68b98f823c2af95ea68bff0aec36f83",
+  "max_output_tokens": 32768,
+  "model": "doubao-seed-1-6-251015",
+  "object": "response",
+  "output": [
+    {
+      "id": "rs_02176519346192100000000000000000000ffffac15322033925d",
+      "type": "reasoning",
+      "summary": [
+        {
+          "type": "summary_text",
+          "text": "\nGot it, let's see. The user said \"hello.\" First, I need to respond in a friendly way. Since the system prompt mentions being a helpful assistant, I should greet back and maybe invite them to ask whatever they need help with. Let me make it natural. Like, \"Hello! How can I assist you today?\" That's simple and open-ended. Yeah, that works."
+        }
+      ],
+      "status": "completed"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Hello! How can I assist you today? Whether you have a question, need help with a task, or just want to chat, feel free to let me know. 😊"
+        }
+      ],
+      "status": "completed",
+      "id": "msg_02176519346378200000000000000000000ffffac153220cfab51"
+    }
+  ],
+  "service_tier": "default",
+  "status": "completed",
+  "usage": {
+    "input_tokens": 35,
+    "output_tokens": 118,
+    "total_tokens": 153,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 82
+    }
+  },
+  "caching": {
+    "type": "disabled"
+  },
+  "store": true,
+  "expire_at": 1765452661
+}

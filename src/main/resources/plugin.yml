@@ -1,0 +1,6 @@
+name: PoisonTone
+version: '1.0'
+main: sudark2.Sudark.poisonTone.PoisonTone
+api-version: '1.21'
+load: STARTUP
+authors: [ Sudark ]
