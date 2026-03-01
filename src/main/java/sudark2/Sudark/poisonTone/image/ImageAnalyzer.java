@@ -11,18 +11,27 @@ import java.io.IOException;
 
 public class ImageAnalyzer {
 
+    private static final String MINI_MODEL = "doubao-seed-2-0-mini-260215";
     private static final String PROMPT = "判断这张图片是否为表情包/梗图。" +
             "如果是，从以下类别中选一个最匹配的情绪输出：开心、满足、沮丧、悲伤、观望、不满、愤怒。" +
             "如果不是表情包或无法归类，直接输出：忽略";
 
     public static void analyzeAndStore(String imageUrl) {
-        String emotion = classify(imageUrl);
-        if (emotion == null)
+        String cached = ImageStore.getCached(imageUrl);
+        if (cached != null)
             return;
+
+        String emotion = classify(imageUrl);
+        if (emotion == null) {
+            ImageStore.putCache(imageUrl, "忽略");
+            return;
+        }
+
+        ImageStore.putCache(imageUrl, emotion);
         try {
             byte[] bytes = download(imageUrl);
             if (bytes != null)
-                ImageStore.add(emotion, bytes);
+                ImageStore.add(emotion, imageUrl, bytes);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -31,7 +40,7 @@ public class ImageAnalyzer {
     private static String classify(String imageUrl) {
         try {
             JSONObject req = new JSONObject();
-            req.put("model", DouBaoApi.getModel());
+            req.put("model", MINI_MODEL);
 
             JSONArray input = new JSONArray();
             JSONObject userMsg = new JSONObject();

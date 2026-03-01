@@ -5,11 +5,11 @@
 ## 主要功能
 
 - **毒舌 AI 对话** — 群内正常聊天即可触发，流式返回，逐句实时发送
-- **表情包自动收集** — 群内图片自动通过模型分析情绪，归类保存
+- **表情包自动收集** — 群内图片自动通过 mini 模型分析情绪，归类保存；已识别的 URL 自动缓存跳过，避免重复调用 API
 - **表情包发送** — AI 根据语境触发 `sendPicture(情绪)`，随机发送对应类别表情
 - **复读** — AI 判断发言不合语境时触发 `repeat`，复读上一条消息
 - **禁言** — AI 对极端发言触发 `setb(QQ号,秒数)`
-- **模型热切换** — OP 发送 `.使用大模型` / `.使用小模型` 切换
+- **模型热切换** — OP 发送 `.使用大模型` / `.使用小模型` 切换对话模型
 - **Prompt 热重载** — OP 发送 `.重载prompt` 重新加载人设并重置会话
 
 ## 项目结构
@@ -22,8 +22,8 @@ src/main/java/sudark2/Sudark/poisonTone/
 ├── bot/
 │   └── OneBotClient.java    # OneBot WebSocket 客户端，消息收发
 ├── image/
-│   ├── ImageAnalyzer.java   # Chat Completions API 图片情绪分类
-│   └── ImageStore.java      # 7类情绪表情包存储、随机取图
+│   ├── ImageAnalyzer.java   # 使用 mini 模型做图片情绪分类，带 URL 缓存去重
+│   └── ImageStore.java      # 7类情绪表情包存储、URL 缓存序列化、随机取图
 └── PoisonTone.java          # 插件入口
 
 src/main/resources/
@@ -31,6 +31,19 @@ src/main/resources/
 ├── prompt.md                # 默认 Prompt（首次运行释放到插件目录）
 └── plugin.yml
 ```
+
+### 关键机制说明
+
+**URL 缓存去重** (`ImageStore.urlCache`)
+
+群内图片在首次识别后将 URL → 识别结果写入 `HashMap<String, String>`，并序列化到 `url_cache.dat` 持久保存。下次遇到相同 URL 直接跳过，不再调用 API 也不再下载图片。图片文件名使用 URL 的 hashCode 命名，同一 URL 不会重复存储。
+
+**双模型架构**
+
+| 用途 | 模型 | 说明 |
+|---|---|---|
+| 群聊对话 | `doubao-seed-2-0-lite-260215` | 默认对话模型，可通过 OP 命令切换 |
+| 图片情绪识别 | `doubao-seed-2-0-mini-260215` | 固定使用 mini 模型，轻量快速 |
 
 ## 前置要求
 
@@ -43,8 +56,8 @@ src/main/resources/
 1. 注册并登录 [火山方舟](https://console.volcengine.com/ark)
 2. 创建 API Key，填入 `config.yml` 的 `API-KEY`
 3. 确保以下模型已开通：
-   - `doubao-seed-2-0-lite-260215`（大模型，同时用于对话和图片分析）
-   - `doubao-seed-2-0-mini-260215`（小模型，可选切换）
+   - `doubao-seed-2-0-lite-260215`（对话用）
+   - `doubao-seed-2-0-mini-260215`（图片识别用）
 
 ## 配置说明
 
@@ -93,15 +106,29 @@ AI 的回复以 `+` 分割为多句，逐句流式发送。句间可穿插动作
 以下命令仅 `OP-QQ` 配置的管理员可用，以 `.` 开头：
 
 ```
-.使用大模型      # 切换到 doubao-seed-2-0-lite
-.使用小模型      # 切换到 doubao-seed-2-0-mini
+.使用大模型      # 切换对话模型到 doubao-seed-2-0-lite
+.使用小模型      # 切换对话模型到 doubao-seed-2-0-mini
 .重载prompt      # 重新加载 prompt.md 并重置对话上下文
 ```
 
 ### 表情包自动收集
 
-群内任何人发的图片都会自动通过 Responses API 独立分析（无会话上下文）。如果判定为表情包且情绪匹配 7 类之一（开心/满足/沮丧/悲伤/观望/不满/愤怒），自动下载保存到 `emojis/对应情绪/` 目录，供 AI 后续随机使用。
+群内任何人发的图片都会自动通过 **mini 模型** 独立分析（无会话上下文）。流程如下：
+
+```
+收到图片URL → 查 urlCache 命中? → 跳过
+                    ↓ 未命中
+           调用 mini 模型识别情绪
+                    ↓
+         情绪匹配7类之一? → 缓存 + 下载保存到 emojis/情绪/
+                    ↓ 不匹配
+           缓存为"忽略"，不再处理
+```
+
+缓存通过 Java 序列化持久保存到 `plugins/PoisonTone/url_cache.dat`，重启后自动加载。
 
 ### 自定义 Prompt
 
 编辑 `plugins/PoisonTone/prompt.md` 修改 AI 人设和输出规范，然后在群内发送 `.重载prompt` 即可热生效（会同时重置对话上下文）。
+
+Prompt 中定义了输出格式（`+` 分隔多句、动作指令语法）和角色性格，是 AI 行为的核心配置。详见 `src/main/resources/prompt.md` 中的默认模板。
