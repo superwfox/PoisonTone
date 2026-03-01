@@ -79,13 +79,18 @@ public class DouBaoApi {
         JSONObject req = new JSONObject();
         req.put("model", model);
         req.put("stream", true);
-        if (prompt != null && !prompt.isEmpty())
-            req.put("instructions", prompt);
 
         if (lastResponseId != null && !lastResponseId.isEmpty())
             req.put("previous_response_id", lastResponseId);
 
         JSONArray input = new JSONArray();
+        if ((lastResponseId == null || lastResponseId.isEmpty())
+                && prompt != null && !prompt.isEmpty()) {
+            JSONObject sysMsg = new JSONObject();
+            sysMsg.put("role", "system");
+            sysMsg.put("content", prompt);
+            input.add(sysMsg);
+        }
         JSONObject userMsg = new JSONObject();
         userMsg.put("role", "user");
         userMsg.put("content", textIn);
@@ -101,7 +106,9 @@ public class DouBaoApi {
             req.put("tools", tools);
         }
 
-        req.put("thinking", "disable");
+        JSONObject thinking = new JSONObject();
+        thinking.put("type", "disabled");
+        req.put("thinking", thinking);
         return req.toString();
     }
 
@@ -145,6 +152,7 @@ public class DouBaoApi {
     }
 
     private static void dispatch(String s, OneBotClient bot, String group) {
+        System.out.println(s);
         if ("pass".equals(s))
             return;
         if ("repeat".equals(s)) {

@@ -42,7 +42,9 @@ public class HttpRequest {
 
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                throw new IOException("Unexpected code: " + response);
+                String err = response.body() != null ? response.body().string() : "";
+                System.out.println("[PoisonTone] API错误: " + err);
+                throw new IOException("Unexpected code: " + response.code());
             }
             return response.body().string();
         }
@@ -57,8 +59,10 @@ public class HttpRequest {
                 .build();
         Response response = streamClient.newCall(request).execute();
         if (!response.isSuccessful()) {
+            String err = response.body() != null ? response.body().string() : "";
             response.close();
-            throw new IOException("Unexpected code: " + response);
+            System.out.println("[PoisonTone] API错误: " + err);
+            throw new IOException("Unexpected code: " + response.code());
         }
         return response;
     }

@@ -26,7 +26,9 @@ public class OneBotClient extends WebSocketClient {
         JSONArray messageArr = new JSONArray();
         JSONObject message0 = new JSONObject();
         message0.put("type", "text");
-        message0.put("data", new JSONObject().put("text", message));
+        JSONObject data = new JSONObject();
+        data.put("text", message);
+        message0.put("data", data);
         messageArr.add(message0);
         params.put("group_id", group);
         params.put("message", messageArr);
@@ -148,7 +150,11 @@ public class OneBotClient extends WebSocketClient {
                     msg += "[语音]（" + url + "）";
                     continue;
                 case "at":
-                    msg += "@" + obj.getJSONObject("data").getString("name");
+                    if(obj.getJSONObject("data").getString("qq").equals(SELF_QQ)) {
+                        msg += "[@了我]";
+                    }else{
+                        msg += "@" + obj.getJSONObject("data").getString("name");
+                    }
                     continue;
                 case "reply":
                     msg += "[回复]";
@@ -180,6 +186,7 @@ public class OneBotClient extends WebSocketClient {
             }
         }
         String textIn = card + "[" + qq + "]:" + msg;
+        System.out.println(textIn);
         DouBaoApi.askStream(textIn, this, qqGroup);
     }
 

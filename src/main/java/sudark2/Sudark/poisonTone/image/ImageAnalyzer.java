@@ -33,26 +33,30 @@ public class ImageAnalyzer {
             JSONObject req = new JSONObject();
             req.put("model", DouBaoApi.getModel());
 
-            JSONArray messages = new JSONArray();
+            JSONArray input = new JSONArray();
             JSONObject userMsg = new JSONObject();
             userMsg.put("role", "user");
 
             JSONArray content = new JSONArray();
             JSONObject textPart = new JSONObject();
-            textPart.put("type", "text");
+            textPart.put("type", "input_text");
             textPart.put("text", PROMPT);
             content.add(textPart);
 
             JSONObject imagePart = new JSONObject();
-            imagePart.put("type", "image_url");
-            imagePart.put("image_url", new JSONObject().put("url", imageUrl));
+            imagePart.put("type", "input_image");
+            imagePart.put("image_url", imageUrl);
             content.add(imagePart);
 
             userMsg.put("content", content);
-            messages.add(userMsg);
-            req.put("messages", messages);
+            input.add(userMsg);
+            req.put("input", input);
 
-            String response = DouBaoApi.getClient().post("/chat/completions", req.toString());
+            JSONObject thinking = new JSONObject();
+            thinking.put("type", "disabled");
+            req.put("thinking", thinking);
+
+            String response = DouBaoApi.getClient().post("/responses", req.toString());
             return parseEmotion(response);
         } catch (IOException e) {
             e.printStackTrace();
@@ -62,15 +66,22 @@ public class ImageAnalyzer {
 
     private static String parseEmotion(String response) {
         JSONObject json = JSONObject.fromObject(response);
-        JSONArray choices = json.getJSONArray("choices");
-        if (choices.isEmpty())
-            return null;
-        String text = choices.getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content").trim();
-        for (String e : ImageStore.EMOTIONS) {
-            if (text.contains(e))
-                return e;
+        JSONArray output = json.getJSONArray("output");
+        for (int i = 0; i < output.size(); i++) {
+            JSONObject item = output.getJSONObject(i);
+            if (!"message".equals(item.optString("type")))
+                continue;
+            JSONArray content = item.getJSONArray("content");
+            for (int j = 0; j < content.size(); j++) {
+                JSONObject part = content.getJSONObject(j);
+                if (!"output_text".equals(part.optString("type")))
+                    continue;
+                String text = part.getString("text").trim();
+                for (String e : ImageStore.EMOTIONS) {
+                    if (text.contains(e))
+                        return e;
+                }
+            }
         }
         return null;
     }
