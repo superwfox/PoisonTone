@@ -1,5 +1,6 @@
 package sudark2.Sudark.poisonTone;
 
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 import sudark2.Sudark.poisonTone.api.DouBaoApi;
 import sudark2.Sudark.poisonTone.image.ImageStore;
@@ -14,6 +15,13 @@ public final class PoisonTone extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        saveResource("prompt.md", false);
+
+        FileConfiguration config = getConfig();
+        OneBotClient.GroupNum = config.getString("GROUP");
+        OneBotClient.SELF_QQ = config.getString("SELF-QQ");
+        OneBotClient.OpQQ = config.getString("OP-QQ");
+
         DouBaoApi.init();
         ImageStore.init(getDataFolder());
         try {

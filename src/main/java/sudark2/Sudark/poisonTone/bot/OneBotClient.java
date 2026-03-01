@@ -11,9 +11,9 @@ import java.net.URI;
 
 public class OneBotClient extends WebSocketClient {
 
-    static String GroupNum = "1076566686";
-    static final String SELF_QQ = "3101965697";
-    static final String OpQQ = "2054565750";
+    public static String GroupNum;
+    public static String SELF_QQ;
+    public static String OpQQ;
     static JSONArray StoredMessage = new JSONArray();
 
     public OneBotClient(URI serverUri) {
@@ -174,6 +174,11 @@ public class OneBotClient extends WebSocketClient {
             if (msg.contains("使用大模型")) {
                 DouBaoApi.switchModel("doubao-seed-2-0-lite-260215");
                 sendG("已切换至大模型", qqGroup);
+                return;
+            }
+            if (msg.contains("重载prompt")) {
+                DouBaoApi.reloadPrompt();
+                sendG("prompt已重载,会话已重置", qqGroup);
                 return;
             }
         }

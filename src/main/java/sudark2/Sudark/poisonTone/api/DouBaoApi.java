@@ -8,10 +8,9 @@ import sudark2.Sudark.poisonTone.PoisonTone;
 import sudark2.Sudark.poisonTone.bot.OneBotClient;
 import sudark2.Sudark.poisonTone.image.ImageStore;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 import static org.bukkit.plugin.java.JavaPlugin.getPlugin;
 
@@ -21,6 +20,7 @@ public class DouBaoApi {
     private static String model;
     private static String visionModel;
     private static String lastResponseId;
+    private static String prompt;
     private static HttpRequest client;
 
     public static void init() {
@@ -29,6 +29,7 @@ public class DouBaoApi {
         visionModel = config.getString("VISION-MODEL", "doubao-1-5-vision-pro-32k");
         lastResponseId = config.getString("LAST-RESPONSE-ID", "");
         client = new HttpRequest(BASE_URL, config.getString("API-KEY"));
+        loadPrompt();
     }
 
     public static void save() {
@@ -49,6 +50,22 @@ public class DouBaoApi {
         return visionModel;
     }
 
+    public static void reloadPrompt() {
+        loadPrompt();
+        lastResponseId = "";
+        save();
+    }
+
+    private static void loadPrompt() {
+        File file = new File(getPlugin(PoisonTone.class).getDataFolder(), "prompt.md");
+        try {
+            prompt = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            prompt = "";
+            e.printStackTrace();
+        }
+    }
+
     public static void askStream(String textIn, OneBotClient bot, String group) {
         try {
             String json = assembleJson(textIn);
@@ -63,6 +80,8 @@ public class DouBaoApi {
         JSONObject req = new JSONObject();
         req.put("model", model);
         req.put("stream", true);
+        if (prompt != null && !prompt.isEmpty())
+            req.put("instructions", prompt);
 
         if (lastResponseId != null && !lastResponseId.isEmpty())
             req.put("previous_response_id", lastResponseId);
