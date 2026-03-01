@@ -31,7 +31,7 @@ public class ImageAnalyzer {
     private static String classify(String imageUrl) {
         try {
             JSONObject req = new JSONObject();
-            req.put("model", DouBaoApi.getVisionModel());
+            req.put("model", DouBaoApi.getModel());
 
             JSONArray messages = new JSONArray();
             JSONObject userMsg = new JSONObject();

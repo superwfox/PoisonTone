@@ -18,7 +18,6 @@ public class DouBaoApi {
 
     private static final String BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
     private static String model;
-    private static String visionModel;
     private static String lastResponseId;
     private static String prompt;
     private static HttpRequest client;
@@ -26,7 +25,7 @@ public class DouBaoApi {
     public static void init() {
         FileConfiguration config = getPlugin(PoisonTone.class).getConfig();
         model = config.getString("MODEL", "doubao-seed-2-0-lite-260215");
-        visionModel = config.getString("VISION-MODEL", "doubao-1-5-vision-pro-32k");
+
         lastResponseId = config.getString("LAST-RESPONSE-ID", "");
         client = new HttpRequest(BASE_URL, config.getString("API-KEY"));
         loadPrompt();
@@ -46,8 +45,8 @@ public class DouBaoApi {
         return client;
     }
 
-    public static String getVisionModel() {
-        return visionModel;
+    public static String getModel() {
+        return model;
     }
 
     public static void reloadPrompt() {
