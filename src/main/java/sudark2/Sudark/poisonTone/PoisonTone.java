@@ -1,8 +1,9 @@
 package sudark2.Sudark.poisonTone;
 
 import org.bukkit.plugin.java.JavaPlugin;
-import sudark2.Sudark.poisonTone.DouBaoRelated.DouBaoApi;
-import sudark2.Sudark.poisonTone.QQBotRelated.OneBotClient;
+import sudark2.Sudark.poisonTone.api.DouBaoApi;
+import sudark2.Sudark.poisonTone.image.ImageStore;
+import sudark2.Sudark.poisonTone.bot.OneBotClient;
 
 import java.net.URI;
 
@@ -14,6 +15,7 @@ public final class PoisonTone extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         DouBaoApi.init();
+        ImageStore.init(getDataFolder());
         try {
             wsClient = new OneBotClient(new URI("ws://127.0.0.1:3001"));
             wsClient.connectBlocking();
