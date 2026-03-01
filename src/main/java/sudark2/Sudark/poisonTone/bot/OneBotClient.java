@@ -162,10 +162,7 @@ public class OneBotClient extends WebSocketClient {
             }
         }
 
-        if (!msg.startsWith("."))
-            return;
-
-        if (qq.equals(OpQQ)) {
+        if (qq.equals(OpQQ) && msg.startsWith(".")) {
             if (msg.contains("使用小模型")) {
                 DouBaoApi.switchModel("doubao-seed-2-0-mini-260215");
                 sendG("已切换至小模型", qqGroup);
