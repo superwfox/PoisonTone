@@ -1,51 +1,51 @@
 # PoisonTone
 
 ## 项目概要
-PoisonTone 是一个运行在 Paper 服务端（Minecraft 1.21+）上的 QQ 群聊毒舌 AI 机器人插件。通过豆包大模型 Responses API 实现流式群聊对话，能够自动收集群内图片并通过轻量识图模型划分情绪类别予以存储，同时具备控制禁言、执行复读等群管互动功能。
+PoisonTone 是一个运行在 Paper 服务端（Minecraft 1.21+）上的 QQ 群聊 AI 机器人插件。通过豆包大模型实现流式群聊对话，支持自动收集群内图片并通过识图模型将图片按情绪分类保存，具备禁言、复读、发送随机情绪表情等群管互动功能。
 
-## 主要功能
-- **毒舌对话**：无需特定唤醒词，流式响应群聊并逐句发送交互。
-- **表情收集与分发**：AI 自动缓存图片 URL 进行去重，使用专用模型将群图片按情绪分类存储，通过指令随机发送。
-- **行为控制**：AI 能在交互中动态插入对成员特定时长的禁言（`setb`）及对上一条消息的复读（`repeat`）。
-- **动态管控**：支持 OP 通过群内指令热切换语言模型，通过私聊动态读取与覆盖当前的人设规则 (Prompt)。
+## 主要功能与触发方式
+
+- **日常群聊互动**
+  - 无需特定唤醒词，群内直接发言即可获得 AI 流式回复。
+- **自动收集表情包**
+  - **触发方式**：任意群成员发送图片。
+  - **效果**：AI 自动识别图片情绪并保存，遇到已识别过的图片自动跳过。
+- **动态控制人设与提示词 (Prompt)**
+  - **查看当前提示词**：OP（管理员）向机器人私聊发送 `当前提示词`。
+  - **修改提示词**：OP（管理员）向机器人私聊发送 `修改提示词 (新内容)`，例如：`修改提示词 你是一个傲娇的群管`，立即生效。
+- **模型热切换**
+  - **触发方式**：OP（管理员）在群内发送 `.使用大模型` 或 `.使用小模型`。
+  - **效果**：实时切换群聊对话的语言模型版本。
 
 ## 项目结构
 ```text
 src/main/java/sudark2/Sudark/poisonTone/
-├── api/
-│   ├── DouBaoApi.java       # 大模型流式请求交互、响应解析及 Prompt 内存处理
-│   └── HttpRequest.java     # 定制 OkHttp 请求与流式数据获取
-├── bot/
-│   └── OneBotClient.java    # WebSocket 通信中心，处理群聊及私聊的消息收发分拣
-├── image/
-│   ├── ImageAnalyzer.java   # 图片情绪识别模型调用
-│   └── ImageStore.java      # URL 缓存序列化机制与情绪图片持久化保存
-└── PoisonTone.java          # 插件加载卸载的生命周期主类定义
-
-src/main/resources/
-├── config.yml               # 基础设置（群号、管理员、API密钥）
-└── prompt.md                # 默认设定的提示词文本模板
+├── api/             # API 请求与 Prompt 处理
+├── bot/             # OneBot 客户端消息收发
+└── image/           # 图片情绪分类与缓存分发
 ```
 
-## 使用方法介绍（结合代码实现）
+## 实现细节（代码剖析）
 
-### 1. 对话与动作触发
-AI 接收到群内信息后经由 `DouBaoApi.askStream` 调用流式响应，随后在 `DouBaoApi.dispatch()` 分发文本与动作。返回数据通过 `+` 分割后：
-- **普通文本**：默认执行 `bot.sendG(s, group)` 将语句发回群聊。
-- **动作 - 发送表情**：若解析出 `sendPicture(情绪)`，系统调取 `ImageStore.getRandom("情绪")` 取出 Base64 传递给 `bot.sendPicture(b64)` 完成发图。
-- **动作 - 实施禁言**：解析 `setb(QQ,时长)`，系统下发至 `bot.setb(qq, duration)` 发动封禁。
-- **动作 - 执行复读**：解析 `repeat`，将上回收集在 `StoredMessage` 中的消息直接 `bot.repeat()` 重发。
+### 1. 通信与消息分发调度
+- AI 接收信息后经 `DouBaoApi.askStream()` 进行流式响应，并在 `DouBaoApi.dispatch()` 分发纯文本与内部动作指令。语句以 `+` 号分割。
+- **特殊动作指令解析**：
+  - 发送表情：AI 输出 `sendPicture(情绪)` 时，调用 `ImageStore.getRandom("情绪")` 转交 `bot.sendPicture(b64)` 完成发图。
+  - 实施禁言：AI 输出 `setb(QQ,时长)` 时，转交 `bot.setb(qq, duration)` 发动封禁。
+  - 执行复读：AI 输出 `repeat` 时，将存在 `OneBotClient.StoredMessage` 里的上一条消息直接 `bot.repeat()` 重发。
 
-### 2. 模型类型热切换（群聊管控）
-系统内置了双模型区分。若管理员（对应 `config.yml` 内配置的 `OP-QQ`）在群里发言以 `.` 开头：
-- 发送 `.使用大模型的指令` (`.使用大模型`)：`OneBotClient.onMessage()` 会匹配后调用 `DouBaoApi.switchModel("doubao-seed-2-0-lite-260215")` 切换语言处理模型为主力大模型并发送成功提示。
-- 发送 `.使用小模型的指令` (`.使用小模型`)：调用 `DouBaoApi.switchModel("doubao-seed-2-0-mini-260215")`，从而快速降级到轻量版模型进行普通对话。
+### 2. 双模型设计与热切换
+- 对话通常使用 `doubao-seed-2-0-lite` 大模型，图片情绪识别固定使用 `doubao-seed-2-0-mini` 小模型以保证轻量处理。
+- `OneBotClient` 群聊监听事件中拦截以 `.` 开头的管理员消息：
+  - `.使用大模型`：调用 `DouBaoApi.switchModel("doubao-seed-2-0-lite-260215")`。
+  - `.使用小模型`：调用 `DouBaoApi.switchModel("doubao-seed-2-0-mini-260215")`。
 
-### 3. 人设词热重载（私聊管控）
-针对管理提示词的需求，逻辑收束在 `OneBotClient.java` 私聊事件监听内：
-- **获取当前 Prompt**：由 `OP-QQ` 在私聊准确发送 `当前提示词`，代码将调用 `DouBaoApi.getPrompt()` 取回内存中暂存的文本并调用 `sendP()` 直接发给管理员。
-- **更新当前 Prompt**：由 `OP-QQ` 在私聊发送包含前缀 `修改提示词 (新内容)` 的消息。截取新内容后流转至 `DouBaoApi.updatePrompt(newPrompt)`，方法内会复写本地 `prompt.md` 并在完毕后触发 `reloadPrompt()`，完成实时的重载与生效闭环。
+### 3. Prompt 热重载机制
+逻辑位于 `OneBotClient.java` 私聊事件：
+- 当识别为管理员发来的私聊，精准匹配 `"当前提示词"` 时调用 `DouBaoApi.getPrompt()`，以私聊 `sendP()` 返回。
+- 开头匹配 `"修改提示词 "` 时，截取后半段调用 `DouBaoApi.updatePrompt(newPrompt)` 写回本地 `prompt.md` 并调用 `reloadPrompt()` 热重启内存，重置上一次的 `lastResponseId` 以刷新记忆。
 
-### 4. 表情库自动收集识别
-任意成员在群聊发送 `[图片]` 消息时，`OneBotClient` 会提取图片原始 URL，启动异步线程调起 `ImageAnalyzer.analyzeAndStore(imgUrl)`：
-程序校验 `ImageStore.urlCache` 是否命中该 URL，未命中则走轻量模型对图片测定情绪词。如果情绪落在7大定义类内，自动由 URL 爬取原图，编码落地到 `emojis/分类名/哈希.txt` 以供发图功能后期使用，并将该状态序列化缓存持久保持。
+### 4. 表情包去重与缓存
+- `OneBotClient` 收到 `[图片]` 类型消息后提取 URL，开启一个新线程丢给 `ImageAnalyzer.analyzeAndStore(imgUrl)` 处理。
+- 首先通过 `ImageStore.urlCache` (HashMap) 检查命中提升效率。若为新图片，则提交给图片模型研判，当分析出的情绪在预设的 7大类（开心/沮丧等）内，才执行网络下载。
+- 图片按分类编码为 Base64 `.txt` 存入 `emojis/情绪/`，并将 URL 哈希字典固化至 `url_cache.dat` 文件用于跨重启持久化。
