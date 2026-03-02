@@ -1,134 +1,51 @@
 # PoisonTone
 
-一个运行在 Paper 服务端上的 QQ 群聊毒舌 AI 机器人插件。通过豆包大模型 Responses API 实现流式对话，支持表情包自动收集与情绪分发、禁言、复读等群聊互动功能。
+## 项目概要
+PoisonTone 是一个运行在 Paper 服务端（Minecraft 1.21+）上的 QQ 群聊毒舌 AI 机器人插件。通过豆包大模型 Responses API 实现流式群聊对话，能够自动收集群内图片并通过轻量识图模型划分情绪类别予以存储，同时具备控制禁言、执行复读等群管互动功能。
 
 ## 主要功能
-
-- **毒舌 AI 对话** — 群内正常聊天即可触发，流式返回，逐句实时发送
-- **表情包自动收集** — 群内图片自动通过 mini 模型分析情绪，归类保存；已识别的 URL 自动缓存跳过，避免重复调用 API
-- **表情包发送** — AI 根据语境触发 `sendPicture(情绪)`，随机发送对应类别表情
-- **复读** — AI 判断发言不合语境时触发 `repeat`，复读上一条消息
-- **禁言** — AI 对极端发言触发 `setb(QQ号,秒数)`
-- **模型热切换** — OP 发送 `.使用大模型` / `.使用小模型` 切换对话模型
-- **Prompt 热重载** — OP 发送 `.重载prompt` 重新加载人设并重置会话
+- **毒舌对话**：无需特定唤醒词，流式响应群聊并逐句发送交互。
+- **表情收集与分发**：AI 自动缓存图片 URL 进行去重，使用专用模型将群图片按情绪分类存储，通过指令随机发送。
+- **行为控制**：AI 能在交互中动态插入对成员特定时长的禁言（`setb`）及对上一条消息的复读（`repeat`）。
+- **动态管控**：支持 OP 通过群内指令热切换语言模型，通过私聊动态读取与覆盖当前的人设规则 (Prompt)。
 
 ## 项目结构
-
-```
+```text
 src/main/java/sudark2/Sudark/poisonTone/
 ├── api/
-│   ├── DouBaoApi.java       # 豆包 Responses API 交互、流式解析、动作分发
-│   └── HttpRequest.java     # OkHttp 封装（普通请求 + 流式请求）
+│   ├── DouBaoApi.java       # 大模型流式请求交互、响应解析及 Prompt 内存处理
+│   └── HttpRequest.java     # 定制 OkHttp 请求与流式数据获取
 ├── bot/
-│   └── OneBotClient.java    # OneBot WebSocket 客户端，消息收发
+│   └── OneBotClient.java    # WebSocket 通信中心，处理群聊及私聊的消息收发分拣
 ├── image/
-│   ├── ImageAnalyzer.java   # 使用 mini 模型做图片情绪分类，带 URL 缓存去重
-│   └── ImageStore.java      # 7类情绪表情包存储、URL 缓存序列化、随机取图
-└── PoisonTone.java          # 插件入口
+│   ├── ImageAnalyzer.java   # 图片情绪识别模型调用
+│   └── ImageStore.java      # URL 缓存序列化机制与情绪图片持久化保存
+└── PoisonTone.java          # 插件加载卸载的生命周期主类定义
 
 src/main/resources/
-├── config.yml               # 配置文件
-├── prompt.md                # 默认 Prompt（首次运行释放到插件目录）
-└── plugin.yml
+├── config.yml               # 基础设置（群号、管理员、API密钥）
+└── prompt.md                # 默认设定的提示词文本模板
 ```
 
-### 关键机制说明
+## 使用方法介绍（结合代码实现）
 
-**URL 缓存去重** (`ImageStore.urlCache`)
+### 1. 对话与动作触发
+AI 接收到群内信息后经由 `DouBaoApi.askStream` 调用流式响应，随后在 `DouBaoApi.dispatch()` 分发文本与动作。返回数据通过 `+` 分割后：
+- **普通文本**：默认执行 `bot.sendG(s, group)` 将语句发回群聊。
+- **动作 - 发送表情**：若解析出 `sendPicture(情绪)`，系统调取 `ImageStore.getRandom("情绪")` 取出 Base64 传递给 `bot.sendPicture(b64)` 完成发图。
+- **动作 - 实施禁言**：解析 `setb(QQ,时长)`，系统下发至 `bot.setb(qq, duration)` 发动封禁。
+- **动作 - 执行复读**：解析 `repeat`，将上回收集在 `StoredMessage` 中的消息直接 `bot.repeat()` 重发。
 
-群内图片在首次识别后将 URL → 识别结果写入 `HashMap<String, String>`，并序列化到 `url_cache.dat` 持久保存。下次遇到相同 URL 直接跳过，不再调用 API 也不再下载图片。图片文件名使用 URL 的 hashCode 命名，同一 URL 不会重复存储。
+### 2. 模型类型热切换（群聊管控）
+系统内置了双模型区分。若管理员（对应 `config.yml` 内配置的 `OP-QQ`）在群里发言以 `.` 开头：
+- 发送 `.使用大模型的指令` (`.使用大模型`)：`OneBotClient.onMessage()` 会匹配后调用 `DouBaoApi.switchModel("doubao-seed-2-0-lite-260215")` 切换语言处理模型为主力大模型并发送成功提示。
+- 发送 `.使用小模型的指令` (`.使用小模型`)：调用 `DouBaoApi.switchModel("doubao-seed-2-0-mini-260215")`，从而快速降级到轻量版模型进行普通对话。
 
-**双模型架构**
+### 3. 人设词热重载（私聊管控）
+针对管理提示词的需求，逻辑收束在 `OneBotClient.java` 私聊事件监听内：
+- **获取当前 Prompt**：由 `OP-QQ` 在私聊准确发送 `当前提示词`，代码将调用 `DouBaoApi.getPrompt()` 取回内存中暂存的文本并调用 `sendP()` 直接发给管理员。
+- **更新当前 Prompt**：由 `OP-QQ` 在私聊发送包含前缀 `修改提示词 (新内容)` 的消息。截取新内容后流转至 `DouBaoApi.updatePrompt(newPrompt)`，方法内会复写本地 `prompt.md` 并在完毕后触发 `reloadPrompt()`，完成实时的重载与生效闭环。
 
-| 用途 | 模型 | 说明 |
-|---|---|---|
-| 群聊对话 | `doubao-seed-2-0-lite-260215` | 默认对话模型，可通过 OP 命令切换 |
-| 图片情绪识别 | `doubao-seed-2-0-mini-260215` | 固定使用 mini 模型，轻量快速 |
-
-## 前置要求
-
-1. **Paper 1.21+** 服务端
-2. **OneBot 协议端** 运行在 `ws://127.0.0.1:3001`
-3. **火山方舟** 豆包 API 账号
-
-### 火山方舟平台操作
-
-1. 注册并登录 [火山方舟](https://console.volcengine.com/ark)
-2. 创建 API Key，填入 `config.yml` 的 `API-KEY`
-3. 确保以下模型已开通：
-   - `doubao-seed-2-0-lite-260215`（对话用）
-   - `doubao-seed-2-0-mini-260215`（图片识别用）
-
-## 配置说明
-
-`plugins/PoisonTone/config.yml`：
-
-```yaml
-API-KEY: "你的火山方舟API密钥"
-LAST-RESPONSE-ID: ""           # 自动维护，无需手动填写
-MODEL: "doubao-seed-2-0-lite-260215"
-GROUP: "你的群号"
-SELF-QQ: "机器人QQ号"
-OP-QQ: "管理员QQ号"
-```
-
-## 部署步骤
-
-1. 构建插件 JAR 并放入 `plugins/` 目录
-2. 首次启动服务器，插件自动生成：
-   - `plugins/PoisonTone/config.yml` — 编辑填入你的配置
-   - `plugins/PoisonTone/prompt.md` — 可自定义 AI 人设
-   - `plugins/PoisonTone/emojis/` — 7 个情绪子目录（开心/满足/沮丧/悲伤/观望/不满/愤怒）
-3. 表情包会从群聊图片中自动收集，也可手动将表情包放入对应情绪子目录
-4. 重启服务器
-
-## 使用方法
-
-### 群聊对话
-
-群内正常聊天即可触发 AI 回复，无需任何前缀：
-
-```
-群友: 你觉得我帅吗
-AI:   帅是不可能帅的
-AI:   [表情包-不满]
-AI:   这辈子都不可能帅的
-```
-
-AI 的回复以 `+` 分割为多句，逐句流式发送。句间可穿插动作指令：
-- `sendPicture(情绪)` → 从对应情绪文件夹随机发一张表情包
-- `repeat` → 复读上一条群消息
-- `setb(QQ号,秒数)` → 禁言指定用户
-- `pass` → 跳过回复
-
-### OP 管理命令
-
-以下命令仅 `OP-QQ` 配置的管理员可用，以 `.` 开头：
-
-```
-.使用大模型      # 切换对话模型到 doubao-seed-2-0-lite
-.使用小模型      # 切换对话模型到 doubao-seed-2-0-mini
-.重载prompt      # 重新加载 prompt.md 并重置对话上下文
-```
-
-### 表情包自动收集
-
-群内任何人发的图片都会自动通过 **mini 模型** 独立分析（无会话上下文）。流程如下：
-
-```
-收到图片URL → 查 urlCache 命中? → 跳过
-                    ↓ 未命中
-           调用 mini 模型识别情绪
-                    ↓
-         情绪匹配7类之一? → 缓存 + 下载保存到 emojis/情绪/
-                    ↓ 不匹配
-           缓存为"忽略"，不再处理
-```
-
-缓存通过 Java 序列化持久保存到 `plugins/PoisonTone/url_cache.dat`，重启后自动加载。
-
-### 自定义 Prompt
-
-编辑 `plugins/PoisonTone/prompt.md` 修改 AI 人设和输出规范，然后在群内发送 `.重载prompt` 即可热生效（会同时重置对话上下文）。
-
-Prompt 中定义了输出格式（`+` 分隔多句、动作指令语法）和角色性格，是 AI 行为的核心配置。详见 `src/main/resources/prompt.md` 中的默认模板。
+### 4. 表情库自动收集识别
+任意成员在群聊发送 `[图片]` 消息时，`OneBotClient` 会提取图片原始 URL，启动异步线程调起 `ImageAnalyzer.analyzeAndStore(imgUrl)`：
+程序校验 `ImageStore.urlCache` 是否命中该 URL，未命中则走轻量模型对图片测定情绪词。如果情绪落在7大定义类内，自动由 URL 爬取原图，编码落地到 `emojis/分类名/哈希.txt` 以供发图功能后期使用，并将该状态序列化缓存持久保持。

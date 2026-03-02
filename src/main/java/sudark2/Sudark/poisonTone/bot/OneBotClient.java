@@ -42,6 +42,21 @@ public class OneBotClient extends WebSocketClient {
         }
     }
 
+    public void sendP(String user, String message) {
+        JSONObject connected = new JSONObject();
+        JSONObject connectedi = new JSONObject();
+        connectedi.put("user_id", user);
+        connectedi.put("message", message);
+        connectedi.put("auto_escape", "false");
+        connected.put("action", "send_private_msg");
+        connected.put("params", connectedi);
+        try {
+            this.send(connected.toString());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     public void repeat() {
         JSONObject json = new JSONObject();
         JSONObject params = new JSONObject();
@@ -108,8 +123,23 @@ public class OneBotClient extends WebSocketClient {
     @Override
     public void onMessage(String s) {
         JSONObject json = JSONObject.fromObject(s);
-        if (!json.containsKey("group_id"))
+        if (!json.containsKey("group_id")) {
+            if (json.containsKey("message_type") && json.getString("message_type").equals("private")) {
+                String qq = json.getString("user_id");
+                if (qq.equals(OpQQ)) {
+                    String msg =  json.getJSONArray("message").getJSONObject(0).getJSONObject("data").getString("text");
+                    if (msg.startsWith("修改提示词 ")) {
+                        String newPrompt = msg.substring("修改提示词 ".length());
+                        DouBaoApi.updatePrompt(newPrompt);
+                        sendP(qq, "已重载提示");
+                    } else if ("当前提示词".equals(msg)) {
+                        sendP(qq, DouBaoApi.getPrompt());
+                    }
+                }
+            }
             return;
+        }
+
         if (!"message".equals(json.optString("post_type")))
             return;
 
@@ -150,9 +180,9 @@ public class OneBotClient extends WebSocketClient {
                     msg += "[语音]（" + url + "）";
                     continue;
                 case "at":
-                    if(obj.getJSONObject("data").getString("qq").equals(SELF_QQ)) {
+                    if (obj.getJSONObject("data").getString("qq").equals(SELF_QQ)) {
                         msg += "[@了我]";
-                    }else{
+                    } else {
                         msg += "@" + obj.getJSONObject("data").getString("name");
                     }
                     continue;
@@ -177,11 +207,6 @@ public class OneBotClient extends WebSocketClient {
             if (msg.contains("使用大模型")) {
                 DouBaoApi.switchModel("doubao-seed-2-0-lite-260215");
                 sendG("已切换至大模型", qqGroup);
-                return;
-            }
-            if (msg.contains("重载prompt")) {
-                DouBaoApi.reloadPrompt();
-                sendG("prompt已重载,会话已重置", qqGroup);
                 return;
             }
         }

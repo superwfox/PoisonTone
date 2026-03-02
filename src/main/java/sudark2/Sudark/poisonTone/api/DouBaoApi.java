@@ -65,12 +65,32 @@ public class DouBaoApi {
         }
     }
 
+    public static void updatePrompt(String newPrompt) {
+        File file = new File(getPlugin(PoisonTone.class).getDataFolder(), "prompt.md");
+        try {
+            Files.writeString(file.toPath(), newPrompt, StandardCharsets.UTF_8);
+            reloadPrompt();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static String getPrompt() {
+        return prompt;
+    }
+
     public static void askStream(String textIn, OneBotClient bot, String group) {
         try {
             String json = assembleJson(textIn);
             Response response = client.postStream("/responses", json);
             parseStream(response, bot, group);
         } catch (IOException e) {
+            if (lastResponseId != null && !lastResponseId.isEmpty()) {
+                lastResponseId = "";
+                save();
+                askStream(textIn, bot, group);
+                return;
+            }
             e.printStackTrace();
         }
     }
@@ -154,6 +174,8 @@ public class DouBaoApi {
     private static void dispatch(String s, OneBotClient bot, String group) {
         System.out.println(s);
         if ("pass".equals(s))
+            return;
+        if (s.contains("<") && s.contains(">") || s.contains("function") || s.contains("parameter"))
             return;
         if ("repeat".equals(s)) {
             bot.repeat();
