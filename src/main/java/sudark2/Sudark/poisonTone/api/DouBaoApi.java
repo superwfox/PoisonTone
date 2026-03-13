@@ -80,19 +80,23 @@ public class DouBaoApi {
     }
 
     public static void askStream(String textIn, OneBotClient bot, String group) {
-        try {
-            String json = assembleJson(textIn);
-            Response response = client.postStream("/responses", json);
-            parseStream(response, bot, group);
-        } catch (IOException e) {
-            if (lastResponseId != null && !lastResponseId.isEmpty()) {
-                lastResponseId = "";
-                save();
-                askStream(textIn, bot, group);
-                return;
+        new Thread(() -> {
+            try {
+                String json = assembleJson(textIn);
+                Response response = client.postStream("/responses", json);
+                parseStream(response, bot, group);
+            } catch (IOException e) {
+                if (lastResponseId != null && !lastResponseId.isEmpty()) {
+                    lastResponseId = "";
+                    save();
+                    askStream(textIn, bot, group);
+                    return;
+                }
+                System.out.println("[PoisonTone] API请求遇到异常或超时已自动释放: " + e.getMessage());
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            e.printStackTrace();
-        }
+        }).start();
     }
 
     private static String assembleJson(String textIn) {

@@ -26,7 +26,8 @@ public class HttpRequest {
                 .callTimeout(60, TimeUnit.SECONDS)
                 .build();
         this.streamClient = client.newBuilder()
-                .readTimeout(120, TimeUnit.SECONDS)
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
                 .callTimeout(0, TimeUnit.SECONDS)
                 .build();
     }
