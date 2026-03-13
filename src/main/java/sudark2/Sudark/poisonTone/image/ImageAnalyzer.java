@@ -7,7 +7,13 @@ import okhttp3.Request;
 import okhttp3.Response;
 import sudark2.Sudark.poisonTone.api.DouBaoApi;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 public class ImageAnalyzer {
 
@@ -15,23 +21,26 @@ public class ImageAnalyzer {
     private static final String PROMPT = "判断这张图片是否为表情包/梗图。" +
             "如果是，从以下类别中选一个最匹配的情绪输出：开心、满足、沮丧、悲伤、观望、不满、愤怒。" +
             "如果不是表情包或无法归类，直接输出：忽略";
+    private static final Set<String> urlSeen = Collections.synchronizedSet(new HashSet<>());
 
     public static void analyzeAndStore(String imageUrl) {
-        String cached = ImageStore.getCached(imageUrl);
-        if (cached != null)
+        if (!urlSeen.add(imageUrl))
             return;
-
-        String emotion = classify(imageUrl);
-        if (emotion == null) {
-            ImageStore.putCache(imageUrl, "忽略");
-            return;
-        }
-
-        ImageStore.putCache(imageUrl, emotion);
         try {
             byte[] bytes = download(imageUrl);
-            if (bytes != null)
-                ImageStore.add(emotion, imageUrl, bytes);
+            if (bytes == null)
+                return;
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+            if (img == null)
+                return;
+            if (ImageStore.isDuplicate(img))
+                return;
+
+            String emotion = classify(imageUrl);
+            if (emotion == null)
+                return;
+
+            ImageStore.add(emotion, img, bytes);
         } catch (IOException e) {
             e.printStackTrace();
         }

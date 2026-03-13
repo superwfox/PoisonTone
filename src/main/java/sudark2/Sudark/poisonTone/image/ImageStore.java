@@ -1,5 +1,9 @@
 package sudark2.Sudark.poisonTone.image;
 
+import sudark2.Sudark.poisonTone.Utils.ImageUtil;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
 import java.util.*;
@@ -8,14 +12,11 @@ public class ImageStore {
 
     static final String[] EMOTIONS = { "开心", "满足", "沮丧", "悲伤", "观望", "不满", "愤怒" };
     private static final Map<String, List<String>> images = new HashMap<>();
-    private static final Map<String, String> urlCache = new HashMap<>();
+    private static final Set<String> hashSet = Collections.synchronizedSet(new HashSet<>());
     private static File baseDir;
-    private static File cacheFile;
 
     public static void init(File dataFolder) {
         baseDir = new File(dataFolder, "emojis");
-        cacheFile = new File(dataFolder, "url_cache.dat");
-        loadCache();
         for (String e : EMOTIONS) {
             images.put(e, Collections.synchronizedList(new ArrayList<>()));
             File dir = new File(baseDir, e);
@@ -28,34 +29,35 @@ public class ImageStore {
                 continue;
             for (File f : files) {
                 try {
-                    images.get(e).add(Base64.getEncoder().encodeToString(Files.readAllBytes(f.toPath())));
+                    byte[] bytes = Files.readAllBytes(f.toPath());
+                    images.get(e).add(Base64.getEncoder().encodeToString(bytes));
+                    BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+                    if (img != null)
+                        hashSet.add(buildKey(img));
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
             }
         }
         int total = images.values().stream().mapToInt(List::size).sum();
-        System.out.println("[PoisonTone] 已加载 " + total + " 张表情, 缓存 " + urlCache.size() + " 条URL");
+        System.out.println("[PoisonTone] 已加载 " + total + " 张表情, 已知哈希 " + hashSet.size() + " 条");
     }
 
-    public static synchronized String getCached(String url) {
-        return urlCache.get(url);
+    public static boolean isDuplicate(BufferedImage img) {
+        return hashSet.contains(buildKey(img));
     }
 
-    public static synchronized void putCache(String url, String emotion) {
-        urlCache.put(url, emotion);
-        saveCache();
-    }
-
-    public static synchronized void add(String emotion, String url, byte[] imageBytes) {
+    public static void add(String emotion, BufferedImage img, byte[] imageBytes) {
         if (!images.containsKey(emotion))
             return;
-        String hash = Integer.toHexString(url.hashCode());
-        images.get(emotion).add(Base64.getEncoder().encodeToString(imageBytes));
+        hashSet.add(buildKey(img));
+        String b64 = Base64.getEncoder().encodeToString(imageBytes);
+        images.get(emotion).add(b64);
         File dir = new File(baseDir, emotion);
         dir.mkdirs();
+        String name = Long.toHexString(ImageUtil.aHash(img)) + "_" + Integer.toHexString(ImageUtil.colorHash(img));
         try {
-            Files.write(new File(dir, hash + ".jpg").toPath(), imageBytes);
+            Files.write(new File(dir, name + ".jpg").toPath(), imageBytes);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -69,22 +71,7 @@ public class ImageStore {
         return list.get(new Random().nextInt(list.size()));
     }
 
-    @SuppressWarnings("unchecked")
-    private static void loadCache() {
-        if (!cacheFile.exists())
-            return;
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(cacheFile))) {
-            urlCache.putAll((Map<String, String>) in.readObject());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static void saveCache() {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(cacheFile))) {
-            out.writeObject(new HashMap<>(urlCache));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    private static String buildKey(BufferedImage img) {
+        return ImageUtil.aHash(img) + "_" + ImageUtil.colorHash(img);
     }
 }
